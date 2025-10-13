@@ -21,8 +21,8 @@ class DeviceBuffer:
     @classmethod
     def from_numpy(cls, context, arr):
         """
-        Factory method to create a read-only DeviceBuffer from a NumPy array.
-        This performs a copy from the host (CPU) to the device (GPU).
+        Factory method to create a DeviceBuffer from a NumPy array.
+        The buffer is created as READ_WRITE and data is copied from the host.
 
         Args:
             context (ComputeContext): The compute context.
@@ -31,14 +31,14 @@ class DeviceBuffer:
         Returns:
             DeviceBuffer: A new buffer on the device containing the data.
         """
-        flags = cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR
+        flags = cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR
         cl_buffer = cl.Buffer(context.context, flags, hostbuf=arr)
         return cls(context, cl_buffer, arr.shape, arr.dtype)
 
     @classmethod
     def empty_like(cls, context, arr):
         """
-        Factory method to create an empty, write-only DeviceBuffer on the device 
+        Factory method to create an empty, READ_WRITE DeviceBuffer on the device 
         with the same shape and dtype as a given NumPy array.
 
         Args:
@@ -48,23 +48,31 @@ class DeviceBuffer:
         Returns:
             DeviceBuffer: A new, empty buffer on the device.
         """
-        flags = cl.mem_flags.WRITE_ONLY
+        flags = cl.mem_flags.READ_WRITE
         cl_buffer = cl.Buffer(context.context, flags, size=arr.nbytes)
         return cls(context, cl_buffer, arr.shape, arr.dtype)
 
-    def to_numpy(self):
+    def read(self):
         """
-        Copies the data from the device (GPU) back to the host (CPU) and
+        Reads the data from the device (GPU) back to the host (CPU) and
         returns it as a NumPy array.
 
         Returns:
             np.ndarray: The data from the device as a NumPy array.
         """
-        # Create an empty numpy array on the host to receive the data
         host_array = np.empty(self.shape, dtype=self.dtype)
-        
-        # Enqueue a copy command from the device buffer to the host array
-        # This is a blocking call, ensuring the copy is complete before proceeding.
         cl.enqueue_copy(self.context.queue, host_array, self.cl_buffer)
-        
         return host_array
+
+    def write(self, arr):
+        """
+        Writes data from a NumPy array on the host (CPU) to this existing
+        device buffer (GPU).
+
+        Args:
+            arr (np.ndarray): The source NumPy array.
+        """
+        if arr.shape != self.shape or arr.dtype != self.dtype:
+            raise ValueError("Input array shape or dtype does not match buffer's.")
+        # Blocking call to ensure data is written before any kernel uses it.
+        cl.enqueue_copy(self.context.queue, self.cl_buffer, arr)

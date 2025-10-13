@@ -1,174 +1,108 @@
 # PyCL-GPU: A GPUMiner-Inspired GPGPU Framework
 
-This project is a simple, Python-based framework for General-Purpose computing on Graphics Processing Units (GPGPU) that uses OpenCL as its backend. It is inspired by the modular architecture described in the "Parallel Data Mining on Graphics Processors" paper (GPUMiner), providing a structured way to offload parallel computations to hardware like GPUs and multi-core CPUs from vendors like AMD, Intel, and NVIDIA.
+This project is a simple, Python-based framework for General-Purpose computing on Graphics Processing Units (GPGPU) that uses OpenCL as its backend. It is inspired by the modular architecture described in the "Parallel Data Mining on Graphics Processors" paper (GPUMiner), providing a structured way to offload parallel computations to hardware like GPUs and multi-core CPUs.
 
-It is designed as a lightweight, understandable alternative for developers who want to explore GPGPU programming without relying on the proprietary CUDA ecosystem.
+After a significant refactoring, the framework now uses a more efficient, stream-like pattern with persistent device buffers, minimizing CPU-GPU overhead for repeated tasks.
 
 ## Core Architecture
 
 The framework is composed of several key components:
 
-1.  **`ComputeContext`**: The central controller that finds and manages the OpenCL device.
-2.  **`DeviceBuffer`**: A wrapper for GPU memory that handles data transfers.
-3.  **`Program` & `Kernel`**: Classes that compile and execute kernel code on the device.
-4.  **`ParallelTask`**: A high-level helper class that wraps all the above components into a simple interface, making it easy to accelerate a Python function. It handles kernel compilation upon creation.
-
-    **Note on Error Handling:** The `ParallelTask` constructor compiles your kernel code immediately. If there is a syntax error in your OpenCL C code, it will raise a `pyopencl.LogicError` containing detailed build logs from the OpenCL compiler. This helps you quickly find and debug issues in your kernel.
+1.  **`ComputeContext`**: The central controller that finds and manages the OpenCL device and command queue.
+2.  **`DeviceBuffer`**: A wrapper for persistent GPU memory. It handles buffer allocation and provides `read()` and `write()` methods to transfer data between the host (CPU) and device (GPU).
+3.  **`Program`**: A class that compiles and wraps OpenCL kernel code.
+4.  **`ParallelTask`**: A high-level helper class that encapsulates the above components. It compiles a kernel and provides a lean `execute()` method to run it using pre-allocated `DeviceBuffer` objects.
 
 ## Prerequisites
 
 *   Python 3.x
-*   NumPy, PyOpenCL, and Pillow
 *   A functioning OpenCL 1.2+ driver for your hardware.
 
 ## Installation
 
-Navigate to the project directory and run:
+Navigate to the project directory and install the required packages:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Project Structure
+## Quick Start: The Refactored Workflow
 
-The repository is organized as follows:
+The recommended way to use the framework is to create persistent `DeviceBuffer` objects and reuse them, which is highly efficient.
 
-```
-PyCL-GPU/
-├── framework/ # The core framework source code
-│ ├── __init__.py
-│ ├── context.py
-│ ├── task.py
-│ └── ...
-├── main_simple.py # A basic "vector add" example
-├── main_render.py # The advanced ray tracing example
-├── kernels/ # (Optional) A good place for your .cl files
-│ └── render.cl
-├── requirements.txt
-└── README.md
-```
+### Step 1: Write an OpenCL C Kernel
 
-## Quick Start: How to Accelerate a Python Function
-
-The `ParallelTask` class is the simplest way to use this framework. Here is the general pattern to follow:
-
-### Step 1: Identify the Parallel Logic in Your Code
-
-Look for loops where the **same operation** is performed on every element of a large array.
+Convert the parallel part of your logic into an OpenCL C kernel. Using vector types like `float4` is highly recommended for performance.
 
 ```python
-# This is the kind of code you can accelerate:
-for i in range(len(a)):
-    c[i] = a[i] + b[i]
-```
-
-### Step 2: Write the Logic as an OpenCL C Kernel
-
-Convert the body of the loop into an OpenCL C kernel function and save it as a Python string.
-
-```python
+# The kernel is defined as a Python string
 kernel_code = """
-__kernel void vector_add(__global const float *a, __global const float *b, __global float *c)
+__kernel void vector_add(__global const float4 *a,
+                         __global const float4 *b,
+                         __global float4 *c)
 {
-    int i = get_global_id(0); // Get the unique ID for this thread
+    int i = get_global_id(0);
     c[i] = a[i] + b[i];
 }
 """
 ```
 
-### Step 3: Use `ParallelTask` to Execute the Kernel
+### Step 2: Use `ParallelTask` to Orchestrate
 
-Use the `main_simple.py` file as a template. Create a `ParallelTask` with your kernel, then call `.execute()`.
+The host code creates the task, allocates persistent buffers on the GPU, and then executes the kernel.
 
 ```python
-from framework.task import ParallelTask, OutputBuffer
 import numpy as np
+from framework.task import ParallelTask
+from framework.buffer import DeviceBuffer
 
-# Create the task (this compiles the kernel)
+# 1. Create the task (this compiles the kernel once)
 add_task = ParallelTask(kernel_code)
 
-# Prepare your data as NumPy arrays
-a_host = np.arange(100000, dtype=np.float32)
-b_host = np.arange(100000, dtype=np.float32) * 2
+# 2. Prepare host data and create persistent GPU buffers
+a_host = np.arange(1048576, dtype=np.float32)
+b_host = np.arange(1048576, dtype=np.float32) * 2
+c_host_template = np.empty_like(a_host)
 
-# Execute the task
-c_host = add_task.execute(
-    global_size=(100000,),
-    kernel_args=[
-        a_host, 
-        b_host, 
-        OutputBuffer(a_host.shape) # Specify the output
-    ]
-)
+# These buffers now live on the GPU
+a_buffer = DeviceBuffer.from_numpy(add_task.ctx, a_host)
+b_buffer = DeviceBuffer.from_numpy(add_task.ctx, b_host)
+c_buffer = DeviceBuffer.empty_like(add_task.ctx, c_host_template)
+
+# 3. Define execution parameters and kernel arguments
+global_size = (a_host.size // 4,) # We use float4, so we need 1/4 the work-items
+kernel_args = [a_buffer, b_buffer, c_buffer]
+
+# 4. Execute the kernel
+add_task.execute(global_size, kernel_args)
+
+# 5. Read the result back from the GPU
+c_host = c_buffer.read()
+
+# Now c_host contains the result of the GPU computation
 ```
 
-### How Data is Handled: Input vs. Output
+This pattern is extremely efficient for iterative tasks. You can call `a_buffer.write(new_data)` to update GPU memory and then call `add_task.execute(...)` again with almost no overhead.
 
-The `execute` method intelligently handles data transfer between your computer's RAM (the "host") and the GPU's memory (the "device") based on the type of arguments you provide.
+## Examples Included
 
-*   **Input Buffers (Read-Only):** When you pass a standard **NumPy array** into the `kernel_args` list, the framework treats it as a read-only input. It is automatically copied to the device's memory before the kernel runs, but it is not copied back.
+This project includes several examples demonstrating the framework's capabilities.
 
-*   **Output Buffers (Write-Only):** To get data *back* from the kernel, you must use the `OutputBuffer` helper class.
-    *   `OutputBuffer(shape, dtype=np.float32)`: This tells the framework to create an empty, write-only buffer on the device with the specified shape and data type.
-    *   After your kernel finishes writing to this buffer, its contents are automatically copied back to the host and returned from the `.execute()` method as a new NumPy array.
+### `main_simple.py`
 
-> **Pro Tip: Loading Kernels from Files**
->
-> For larger projects, embedding kernel code in Python strings can become unwieldy. We recommend saving your OpenCL code in separate `.cl` files. This enables syntax highlighting and better organization.
->
-> You can easily load the kernel into your `ParallelTask` like this:
->
-> ```python
-> # Read the kernel code from an external file
-> with open('kernels/my_kernel.cl', 'r') as f:
->     kernel_code = f.read()
->
-> # Create the task as usual
-> my_task = ParallelTask(kernel_code)
-> ```
+A "hello world" example that performs element-wise addition of two large arrays. This is the best starting point for understanding the basic, high-performance workflow.
 
----
+### `main_primes.py`
 
-## Advanced Usage: A Simple Ray Tracer
+A high-performance prime number calculator. It uses a parallel segmented sieve algorithm, a classic GPGPU pattern:
+1.  The CPU finds a small list of "base primes".
+2.  The GPU receives this list.
+3.  Each GPU thread takes a base prime and marks all of its multiples in a large number range as "not prime".
 
-To demonstrate the flexibility of the framework, the `main_render.py` script uses `ParallelTask` to render a 3D scene. This is a perfect example of a more complex GPGPU task.
+This demonstrates a powerful optimization strategy: using the CPU for small pre-calculations to simplify and accelerate the massively parallel work on the GPU.
 
-### The Goal
+### `main_2squared.py`
 
-The script creates a PNG image of a 3D sphere with simple lighting. It does this by calculating the color for every single pixel in parallel on the GPU.
-
-### The Kernel (`render_kernel`)
-
-The OpenCL C kernel for this task is more complex. Here are the key parts:
-
-1.  **Arguments:** It takes an output pixel buffer, the image `width` and `height` (as scalars), and a buffer containing scene objects (a sphere).
-2.  **Pixel-to-Ray Calculation:** Each thread gets its unique 2D pixel coordinate (`x`, `y`) and calculates a "ray" from a virtual camera through that pixel.
-3.  **Ray-Sphere Intersection:** The kernel contains math to test if this ray intersects with the sphere in the scene.
-4.  **Shading:** If the ray hits the sphere, the kernel calculates a simple color based on how the surface faces a light source. If it misses, it writes a background color.
-5.  **Output:** The final color for the pixel is written to the output buffer.
-
-    **Note on Kernel Functions:** It is best practice to use OpenCL's built-in vector types (`float3`, `float4`, etc.) and functions (`dot`, `normalize`, `length`, etc.) whenever possible. Many OpenCL drivers provide highly optimized implementations of these, and defining your own can lead to compiler errors.
-
-### The Python Host Code (`main_render.py`)
-
-The Python script orchestrates the process:
-
-1.  **Setup:** It defines the image size and the scene data (a NumPy array for the sphere).
-2.  **Task Creation:** It creates a `ParallelTask` with the rendering kernel code.
-3.  **Argument Assembly:** It creates a list of arguments for the kernel, showing the power of the flexible `execute` method:
-    *   An `OutputBuffer` defines the output image buffer.
-    *   The `width` and `height` are passed as simple `int` scalars.
-    *   The sphere's data is passed as a NumPy array.
-4.  **Execution:** It calls `task.execute()` with a 2D `global_size` (`(width, height)`), which maps one thread to each pixel.
-5.  **Saving the Image:** The resulting NumPy array is reshaped and saved as `render_output.png` using the Pillow library.
-
-### How to Run the Render
-
-1.  Make sure you have installed the dependencies (`pip install -r requirements.txt`).
-2.  Run the script from your terminal:
-    ```bash
-    python main_render.py
-    ```
-    After it finishes, you will find a `render_output.png` file in the project directory.
+A simple but compelling demonstration of continuous, stateful computation. It initializes a single number on the GPU and then repeatedly calls a kernel to square it in an endless loop. This showcases the efficiency of the persistent buffer model, as the data lives on the GPU and is modified with very little CPU overhead.
 
 ---
 
