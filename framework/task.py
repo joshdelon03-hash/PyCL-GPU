@@ -59,8 +59,8 @@ class MultiParallelTask:
     def __init__(self, kernel_code, use_image_objects=False, pool_size=None):
         self.kernel_code = kernel_code
         self.use_image_objects = use_image_objects
-        # Initialize the global multiprocessing pool
-        self.pool = amp.GlobalMPPool(min_workers=pool_size)
+        # Initialize/trigger the global multiprocessing pool
+        amp.GlobalMPPool(min_workers=pool_size)
 
     def _worker_execute(self, global_size, kernel_args, local_size=None):
         """
@@ -108,8 +108,8 @@ class MultiParallelTask:
 
     def wait_all(self):
         """Wait for all submitted tasks to complete."""
-        self.pool.join()
+        amp.GlobalMPPool().join()
 
     def shutdown(self):
         """Shutdown the underlying AMP pool."""
-        self.pool.shutdown()
+        amp.GlobalMPPool().shutdown()
