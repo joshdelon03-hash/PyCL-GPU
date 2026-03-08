@@ -73,3 +73,18 @@ class ComputeContext:
         """
         cl_program = cl.Program(self.context, kernel_code).build()
         return Program(self, cl_program)
+
+    def release(self):
+        """
+        Releases the command queue and context.
+        """
+        if self.queue:
+            self.queue.finish()
+            self.queue = None
+        self.context = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()

@@ -95,3 +95,17 @@ class DeviceBuffer:
             raise ValueError("Input array shape or dtype does not match buffer's.")
         cl.enqueue_copy(self.context.queue, self.cl_mem, arr)
 
+    def release(self):
+        """
+        Explicitly releases the OpenCL memory object.
+        """
+        if self.cl_mem:
+            self.cl_mem.release()
+            self.cl_mem = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
+

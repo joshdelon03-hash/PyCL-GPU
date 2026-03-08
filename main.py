@@ -68,6 +68,9 @@ def main():
 
     duration = time.time() - start_time
     print(f"--- All tasks completed in {duration:.4f}s ---")
+    
+    # 4. Clean up resources (Security Update)
+    ensemble.shutdown()
 
 if __name__ == "__main__":
     # Note: On Windows, the 'if __name__ == "__main__":' guard 

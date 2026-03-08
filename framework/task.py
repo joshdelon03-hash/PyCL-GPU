@@ -33,6 +33,20 @@ class ParallelTask:
         print(f"Executing kernel '{self.kernel_name}' with global_size {global_size}...")
         kernel_func(*kernel_args, global_size=global_size, local_size=local_size)
 
+    def release(self):
+        """
+        Releases the underlying compute context.
+        """
+        if self.ctx:
+            self.ctx.release()
+            self.ctx = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
+
 class MultiParallelTask:
     """
     The 'AMP' Upgraded Task Manager.
@@ -73,6 +87,12 @@ class MultiParallelTask:
         # 3. Execute
         task.execute(global_size, processed_args, local_size=local_size)
         
+        # 4. Cleanup (Security/Robustness)
+        for arg in processed_args:
+            if isinstance(arg, DeviceBuffer):
+                arg.release()
+        task.ctx.release()
+
         # We could read results back and return them here if needed.
         return True
 
@@ -89,3 +109,7 @@ class MultiParallelTask:
     def wait_all(self):
         """Wait for all submitted tasks to complete."""
         self.pool.join()
+
+    def shutdown(self):
+        """Shutdown the underlying AMP pool."""
+        self.pool.shutdown()
