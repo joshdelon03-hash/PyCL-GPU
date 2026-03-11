@@ -13,6 +13,11 @@ try:
 except ImportError:
     LatencyPredictor = None
 
+try:
+    from framework.algo.astar import AStarRouter
+except ImportError:
+    AStarRouter = None
+
 # We need a pickleable container for tasks
 class TaskPayload:
     def __init__(self, task_id, target, args, kwargs, metadata=None):
@@ -87,6 +92,9 @@ class MultiprocessingPool:
 
         # Neural Predictor
         self.predictor = LatencyPredictor() if LatencyPredictor else None
+        
+        # Day 4: A* Router
+        self.router = AStarRouter(width=16, height=16) if AStarRouter else None
 
         # Start initial workers
         for _ in range(min_workers):
@@ -258,10 +266,31 @@ class MultiprocessingPool:
                     break
             time.sleep(0.1)
 
+    def save_checkpoint(self, filename="amp_checkpoint.npy"):
+        """
+        Day 4 Recovery Protocol: Saves the current congestion map and 
+        task metadata to a .npy file to protect against hardware failure.
+        """
+        if not self.router:
+            return
+            
+        try:
+            state = {
+                'congestion': self.router.congestion,
+                'task_counter': self.task_counter,
+                'timestamp': time.time()
+            }
+            np.save(filename, state)
+            # print(f"Checkpoint saved: {filename}")
+        except Exception as e:
+            # print(f"Checkpoint Error: {e}")
+            pass
+
     def shutdown(self):
         """
         Stops all workers and threads cleanly.
         """
+        self.save_checkpoint() # Day 4: Save before exit
         with self.lock:
             self._shutdown = True
         

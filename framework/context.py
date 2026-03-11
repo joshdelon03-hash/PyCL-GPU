@@ -61,17 +61,18 @@ class ComputeContext:
             print(f"An error occurred during ComputeContext initialization: {e}")
             raise
 
-    def compile(self, kernel_code):
+    def compile(self, kernel_code, options=None):
         """
         Compiles OpenCL C code and returns a Program object.
 
         Args:
             kernel_code (str): A string containing the OpenCL C source code.
+            options (list): A list of build options (e.g., ["-D USE_FP16"]).
 
         Returns:
             Program: A Program object that can be used to execute kernels.
         """
-        cl_program = cl.Program(self.context, kernel_code).build()
+        cl_program = cl.Program(self.context, kernel_code).build(options=options)
         return Program(self, cl_program)
 
     def release(self):
