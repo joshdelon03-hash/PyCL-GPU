@@ -1,0 +1,43 @@
+@article{qin2016dot,
+  title={Dot-product join: An array-relation join operator for big model analytics},
+  author={Qin, Chengjie and Rusu, Florin},
+  journal={arXiv preprint arXiv:1602.08845},
+  year={2016}
+}
+
+@article{fang2008parallel,
+  title={Parallel data mining on graphics processors},
+  author={Fang, Wenbin and Lau, Ka Keung and Lu, Mian and Xiao, Xiangye and Lam, Chi K and Yang, Philip Y and He, Bingsheng and Luo, Qiong and Sander, Pedro V and Yang, Ke},
+  journal={Hong Kong University of Science and Technology, Tech. Rep. HKUST-CS08-07},
+  year={2008}
+}
+
+Ali, A. (2013). ATP: Asynchronous Task Pipeline. GitHub. https://github.com/amrali/atp
+
+@book{palach2014parallel,
+  title={Parallel programming with Python},
+  author={Palach, Jan},
+  year={2014},
+  publisher={Packt Publishing Ltd}
+}
+
+@article{karvandeparallel,
+  title={Parallel Computing: A PyOpenCL Approach},
+  author={Karvande, Mayuri A and Bayas, Shiwani S and Joshi, Amit D and Sawant, Suraj T},
+  journal={Jaypee University of Engineering and Technology, Raghogarh, Guna (MP)},
+  pages={18}
+}
+
+@book{munshi2011opencl,
+  title={OpenCL programming guide},
+  author={Munshi, Aaftab and Gaster, Benedict and Mattson, Timothy G and Ginsburg, Dan},
+  year={2011},
+  publisher={Pearson Education}
+}
+
+@article{guide2020cuda,
+  title={Cuda c++ programming guide},
+  author={Guide, Design},
+  journal={NVIDIA, July},
+  year={2020}
+}

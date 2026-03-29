@@ -5,15 +5,25 @@ PyCL-GPU is a streamlined, Python-based framework for General-Purpose computing 
 ## Key Features
 
 - **Clean API**: Manage GPU contexts, buffers, and kernels with minimal code.
-- **AMP Integrated**: Built-in support for the **Adaptive Multiprocessing Pool (AMP)** to orchestrate parallel GPU tasks across multiple CPU cores.
+- **AMP Integrated**: Includes the **Adaptive Multiprocessing Pool (AMP)** to orchestrate parallel GPU tasks across all available CPU cores.
+- **Speedmaxxing Methodology**: High-velocity optimizations including FP16 vectorization, Memory Grip alignment, and Radix Reordering.
+- **Intelligent Routing**: A* PCIe Data Routing to avoid hardware bus congestion.
 - **Cross-Platform**: Works with any OpenCL-compliant hardware (NVIDIA, AMD, Intel).
+
+## Research Paper
+
+The methodology and performance results of this framework are documented in the paper:
+**"Speedmaxxing: Direct Hardware Access and Optimization for GPGPU using PyCL-GPU"** (Included as `paper.pdf`).
 
 ## Project Structure
 
 - `framework/`: The core library (Context, Buffer, Program, Task management).
-- `kernels/`: OpenCL C kernel source files (e.g., `core.cl`).
-- `main_simple.py`: A basic vector addition example.
-- `main.py`: An advanced "ensemble" example using multiprocessing (AMP).
+- `amp/`: Adaptive Multiprocessing Pool implementation.
+- `kernels/`: OpenCL C kernel source files.
+- `main_dpj.py`: Dot-Product Join + Radix Reordering demo.
+- `main_astar.py`: A* PCIe Routing visualization demo.
+- `main_neural.py`: Latency Predictor neural-driven scaling demo.
+- `main.py`: General ensemble example using AMP.
 
 ## Installation
 
@@ -21,28 +31,22 @@ PyCL-GPU is a streamlined, Python-based framework for General-Purpose computing 
    ```bash
    pip install -r requirements.txt
    ```
-2. Install the `amp` library (included in this repository's ecosystem):
-   ```bash
-   cd ../amp_library
-   pip install -e .
-   ```
+2. The `amp` library is now bundled directly in the `PyCL-GPU-main` folder. No separate installation is required.
 
 ## Quick Start
 
 ### Simple Task
 ```python
-from framework.task import ParallelTask
-task = ParallelTask(kernel_code)
-task.execute(global_size=(N,), kernel_args=[a_gpu, b_gpu, c_gpu])
+from framework.task import GeneralTask
+# See main_simple.py for full context
 ```
 
-### Multiprocessing Ensemble
+### Multiprocessing Ensemble (AMP)
 ```python
 from framework.task import MultiParallelTask
-ensemble = MultiParallelTask(kernel_code)
-ensemble.run_async(global_size=(N, N), kernel_args=[A, B, C, N])
-ensemble.wait_all()
+# Uses all CPU cores to feed the GPU
 ```
 
 ## License
-MIT License.
+Polyform Non-Commercial License 1.0.0.
+"Personal use, teaching, and research are allowed. For-profit business use requires a separate license."
